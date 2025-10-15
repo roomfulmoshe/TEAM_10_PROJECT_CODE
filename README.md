@@ -43,17 +43,29 @@ To run the scripts in this repository, you need to set up a Python virtual envir
 
 The project is organized in a flat structure with the following key components:
 ├── images/
+
 │ ├── 1_tracts_per_zone_distribution.png
+
 │ ├── 2_top_20_complex_zones.png
+
 │ └── 3_apportionment_weight_distribution.png
+
 ├── nyct2020/
+
 │ └── nyct2020.shp (and companion files)
+
 ├── taxi_zones/
+
 │ └── taxi_zones.shp (and companion files)
+
 ├── analyze_crosswalk.py
+
 ├── geospatial_join.py
+
 ├── nyc_zone_tract_crosswalk_FINAL.csv
+
 ├── test_crosswalk.py
+
 └── zones_tracts.html
 
 - **`geospatial_join.py`**: **(The Main Engine)** This is the core script. It takes the raw shapefiles from their respective folders (`nyct2020/` and `taxi_zones/`), performs a series of cleaning and validation steps, and produces the final crosswalk file.
