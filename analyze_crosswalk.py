@@ -21,7 +21,7 @@ except FileNotFoundError:
 # Load the taxi zones shapefile to get the zone names for better plots
 try:
     # We only need the LocationID and the zone name for this analysis
-    taxi_zones_gdf = gpd.read_file('taxi_zones.shp')[['LocationID', 'zone']]
+    taxi_zones_gdf = gpd.read_file('taxi_zones/taxi_zones.shp')[['LocationID', 'zone']]
 except Exception as e:
     print(f"Warning: Could not load taxi_zones.shp: {e}")
     print("Plots will be generated using LocationID numbers instead of names.")

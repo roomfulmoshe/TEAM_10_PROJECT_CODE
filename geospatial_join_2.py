@@ -2,8 +2,8 @@ import pandas as pd
 import geopandas as gpd
 
 print("Step 1: Loading shapefiles...")
-fp_zones = 'taxi_zones.shp'
-fp_tracts = 'nyct2020.shp'
+fp_zones = 'taxi_zones/taxi_zones.shp'
+fp_tracts = 'nyc_tracts/nyct2020.shp'
 projected_crs = 'EPSG:2263'
 
 try:

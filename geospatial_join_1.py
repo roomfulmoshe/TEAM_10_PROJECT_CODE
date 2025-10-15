@@ -6,8 +6,8 @@ print("Step 1: Loading the taxi zone and census tract shapefiles...")
 # Define the filenames for your shapefiles
 # This assumes the script is in the same folder as your shapefiles.
 # If not, you will need to provide the full path to the files.
-fp_zones = 'taxi_zones.shp'
-fp_tracts = 'nyct2020.shp'
+fp_zones = 'taxi_zones/taxi_zones.shp'
+fp_tracts = 'nyc_tracts/nyct2020.shp'
 
 # Use a projected Coordinate Reference System (CRS) suitable for NYC (EPSG:2263)
 # This is critical for calculating area accurately in feet, not degrees.

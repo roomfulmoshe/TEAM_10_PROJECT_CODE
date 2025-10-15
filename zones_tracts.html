@@ -140,7 +140,7 @@
         zoneSvg.call(zoom);
 
         // --- Load and Draw Census Tracts with Tooltips ---
-        d3.json("nyc_tracts.json").then(function (geojson) {
+        d3.json("nyc_tracts/nyc_tracts.json").then(function (geojson) {
             tractProjection.fitSize([width, height], geojson);
 
             tractGroup.selectAll("path")
@@ -163,7 +163,7 @@
         }).catch(handleError(tractGroup, "nyc_tracts.json"));
 
         // --- Load and Draw Taxi Zones with Tooltips ---
-        d3.json("taxi_zones.json").then(function (geojson) {
+        d3.json("taxi_zones/taxi_zones.json").then(function (geojson) {
             zoneProjection.fitSize([width, height], geojson);
 
             zoneGroup.selectAll("path")
