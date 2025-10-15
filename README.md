@@ -42,6 +42,7 @@ To run the scripts in this repository, you need to set up a Python virtual envir
 ## 📁 Repository Structure & File Descriptions
 
 The project is organized in a flat structure with the following key components:
+
 ├── images/
 
 │ ├── 1_tracts_per_zone_distribution.png
