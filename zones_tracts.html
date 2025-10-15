@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>NYC Shapefile Viewer</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f9;
+            margin: 0;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .map-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .map-box {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            text-align: center;
+        }
+
+        .map-box h2 {
+            margin-top: 0;
+            color: #555;
+        }
+
+        svg {
+            cursor: move;
+            border: 1px solid #ddd;
+        }
+
+        .tracts {
+            fill: #4c78a8;
+            /* Blue for tracts */
+            stroke: #fff;
+            stroke-width: 0.2px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .zones {
+            fill: #f58518;
+            /* Orange for zones */
+            stroke: #fff;
+            stroke-width: 0.2px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        path:hover {
+            opacity: 1;
+        }
+
+        /* --- Tooltip Style --- */
+        #tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            pointer-events: none;
+            /* So the mouse events go 'through' the tooltip to the map */
+            opacity: 0;
+            transition: opacity 0.2s;
+            white-space: pre-wrap;
+            /* Allows line breaks */
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>NYC Geographic Layers</h1>
+    <div id="tooltip"></div>
+
+    <div class="map-container">
+        <div class="map-box">
+            <h2>NYC Census Tracts</h2>
+            <div id="tract-map"></div>
+        </div>
+        <div class="map-box">
+            <h2>NYC Taxi Zones</h2>
+            <div id="zone-map"></div>
+        </div>
+    </div>
+
+    <script>
+        const width = 500;
+        const height = 500;
+
+        // --- Create SVG for Census Tracts ---
+        const tractSvg = d3.select("#tract-map").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        const tractGroup = tractSvg.append("g");
+
+        // --- Create SVG for Taxi Zones ---
+        const zoneSvg = d3.select("#zone-map").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        const zoneGroup = zoneSvg.append("g");
+
+        // --- Tooltip ---
+        const tooltip = d3.select("#tooltip");
+
+        // --- Projections ---
+        const tractProjection = d3.geoIdentity();
+        const zoneProjection = d3.geoIdentity();
+        const tractPath = d3.geoPath().projection(tractProjection);
+        const zonePath = d3.geoPath().projection(zoneProjection);
+
+        // --- Zoom ---
+        const zoom = d3.zoom()
+            .scaleExtent([0.8, 10])
+            .on("zoom", () => {
+                const transform = d3.event.transform;
+                tractGroup.attr("transform", transform);
+                zoneGroup.attr("transform", transform);
+            });
+
+        tractSvg.call(zoom);
+        zoneSvg.call(zoom);
+
+        // --- Load and Draw Census Tracts with Tooltips ---
+        d3.json("nyc_tracts.json").then(function (geojson) {
+            tractProjection.fitSize([width, height], geojson);
+
+            tractGroup.selectAll("path")
+                .data(geojson.features)
+                .enter().append("path")
+                .attr("d", tractPath)
+                .attr("class", "tracts")
+                .on("mouseover", function (d) {
+                    tooltip.style("opacity", 1);
+                    // Access the ID from the feature's properties
+                    tooltip.html(`Tract ID: ${d.properties.BoroCT2020}`);
+                })
+                .on("mousemove", function () {
+                    tooltip.style("left", (d3.event.pageX + 10) + "px")
+                        .style("top", (d3.event.pageY - 28) + "px");
+                })
+                .on("mouseout", function () {
+                    tooltip.style("opacity", 0);
+                });
+        }).catch(handleError(tractGroup, "nyc_tracts.json"));
+
+        // --- Load and Draw Taxi Zones with Tooltips ---
+        d3.json("taxi_zones.json").then(function (geojson) {
+            zoneProjection.fitSize([width, height], geojson);
+
+            zoneGroup.selectAll("path")
+                .data(geojson.features)
+                .enter().append("path")
+                .attr("d", zonePath)
+                .attr("class", "zones")
+                .on("mouseover", function (d) {
+                    tooltip.style("opacity", 1);
+                    // Access multiple properties for a richer tooltip
+                    tooltip.html(`Zone: ${d.properties.zone}\nLocationID: ${d.properties.LocationID}`);
+                })
+                .on("mousemove", function () {
+                    tooltip.style("left", (d3.event.pageX + 10) + "px")
+                        .style("top", (d3.event.pageY - 28) + "px");
+                })
+                .on("mouseout", function () {
+                    tooltip.style("opacity", 0);
+                });
+        }).catch(handleError(zoneGroup, "taxi_zones.json"));
+
+        // Helper function for handling file loading errors
+        function handleError(group, filename) {
+            return function (error) {
+                console.error(`Error loading ${filename}:`, error);
+                group.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", height / 2)
+                    .attr("text-anchor", "middle")
+                    .text(`Could not load ${filename}`);
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
