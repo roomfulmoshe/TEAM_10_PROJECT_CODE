@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>NYC Shapefile Viewer</title>
+    <title>NYC Shapefile Viewer with Search & Zoom</title>
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <style>
         body {
@@ -13,6 +13,7 @@
             align-items: center;
             background-color: #f4f4f9;
             margin: 0;
+            padding-bottom: 30px;
         }
 
         h1 {
@@ -22,7 +23,7 @@
         .map-container {
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             flex-wrap: wrap;
             gap: 20px;
             width: 100%;
@@ -41,6 +42,60 @@
             color: #555;
         }
 
+        .search-box {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .search-box input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .search-box button {
+            padding: 8px 12px;
+            border: none;
+            background-color: #4c78a8;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .search-box button:hover {
+            background-color: #3b5f8a;
+        }
+
+        .zoom-controls {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .zoom-controls button {
+            width: 30px;
+            height: 30px;
+            font-size: 20px;
+            font-weight: bold;
+            line-height: 1;
+            padding: 0;
+            border: 1px solid #ddd;
+            background-color: #f7f7f7;
+            color: #555;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .zoom-controls button:hover {
+            background-color: #e9e9e9;
+        }
+
+
         svg {
             cursor: move;
             border: 1px solid #ddd;
@@ -52,7 +107,7 @@
             stroke: #fff;
             stroke-width: 0.2px;
             opacity: 0.8;
-            transition: opacity 0.2s;
+            transition: fill 0.3s;
         }
 
         .zones {
@@ -61,7 +116,12 @@
             stroke: #fff;
             stroke-width: 0.2px;
             opacity: 0.8;
-            transition: opacity 0.2s;
+            transition: fill 0.3s;
+        }
+
+        .highlight {
+            fill: #ffd700;
+            /* Yellow for highlight */
         }
 
         path:hover {
@@ -94,10 +154,26 @@
     <div class="map-container">
         <div class="map-box">
             <h2>NYC Census Tracts</h2>
+            <div class="search-box">
+                <input type="text" id="tract-search-input" placeholder="Enter Tract ID (e.g., 36005000100)">
+                <button id="tract-search-button">Search</button>
+            </div>
+            <div class="zoom-controls">
+                <button id="tract-zoom-in">+</button>
+                <button id="tract-zoom-out">-</button>
+            </div>
             <div id="tract-map"></div>
         </div>
         <div class="map-box">
             <h2>NYC Taxi Zones</h2>
+            <div class="search-box">
+                <input type="text" id="zone-search-input" placeholder="Enter LocationID (e.g., 142)">
+                <button id="zone-search-button">Search</button>
+            </div>
+            <div class="zoom-controls">
+                <button id="zone-zoom-in">+</button>
+                <button id="zone-zoom-out">-</button>
+            </div>
             <div id="zone-map"></div>
         </div>
     </div>
@@ -105,6 +181,10 @@
     <script>
         const width = 500;
         const height = 500;
+
+        // Store geojson features for searching
+        let tractFeatures = [];
+        let zoneFeatures = [];
 
         // --- Create SVG for Census Tracts ---
         const tractSvg = d3.select("#tract-map").append("svg")
@@ -129,18 +209,28 @@
 
         // --- Zoom ---
         const zoom = d3.zoom()
-            .scaleExtent([0.8, 10])
+            .scaleExtent([0.8, 80])
             .on("zoom", () => {
                 const transform = d3.event.transform;
-                tractGroup.attr("transform", transform);
-                zoneGroup.attr("transform", transform);
+                if (d3.event.sourceEvent && d3.event.sourceEvent.target.closest('svg') === tractSvg.node()) {
+                    tractGroup.attr("transform", transform);
+                }
+                if (d3.event.sourceEvent && d3.event.sourceEvent.target.closest('svg') === zoneSvg.node()) {
+                    zoneGroup.attr("transform", transform);
+                }
             });
 
-        tractSvg.call(zoom);
-        zoneSvg.call(zoom);
+        // Separate zoom behaviors for each SVG
+        const tractZoom = d3.zoom().scaleExtent([0.8, 80]).on("zoom", () => tractGroup.attr("transform", d3.event.transform));
+        const zoneZoom = d3.zoom().scaleExtent([0.8, 80]).on("zoom", () => zoneGroup.attr("transform", d3.event.transform));
+
+        tractSvg.call(tractZoom);
+        zoneSvg.call(zoneZoom);
+
 
         // --- Load and Draw Census Tracts with Tooltips ---
         d3.json("nyc_tracts/nyc_tracts.json").then(function (geojson) {
+            tractFeatures = geojson.features; // Store features
             tractProjection.fitSize([width, height], geojson);
 
             tractGroup.selectAll("path")
@@ -150,12 +240,15 @@
                 .attr("class", "tracts")
                 .on("mouseover", function (d) {
                     tooltip.style("opacity", 1);
-                    // Access the ID from the feature's properties
                     tooltip.html(`Tract ID: ${d.properties.BoroCT2020}`);
                 })
                 .on("mousemove", function () {
-                    tooltip.style("left", (d3.event.pageX + 10) + "px")
-                        .style("top", (d3.event.pageY - 28) + "px");
+                    // BUG FIX: Check if d3.event has page coordinates. This prevents
+                    // an error when a mouse event conflicts with a zoom transition event.
+                    if (d3.event && typeof d3.event.pageX !== 'undefined') {
+                        tooltip.style("left", (d3.event.pageX + 10) + "px")
+                            .style("top", (d3.event.pageY - 28) + "px");
+                    }
                 })
                 .on("mouseout", function () {
                     tooltip.style("opacity", 0);
@@ -164,6 +257,7 @@
 
         // --- Load and Draw Taxi Zones with Tooltips ---
         d3.json("taxi_zones/taxi_zones.json").then(function (geojson) {
+            zoneFeatures = geojson.features; // Store features
             zoneProjection.fitSize([width, height], geojson);
 
             zoneGroup.selectAll("path")
@@ -173,17 +267,88 @@
                 .attr("class", "zones")
                 .on("mouseover", function (d) {
                     tooltip.style("opacity", 1);
-                    // Access multiple properties for a richer tooltip
                     tooltip.html(`Zone: ${d.properties.zone}\nLocationID: ${d.properties.LocationID}`);
                 })
                 .on("mousemove", function () {
-                    tooltip.style("left", (d3.event.pageX + 10) + "px")
-                        .style("top", (d3.event.pageY - 28) + "px");
+                    // BUG FIX: Check if d3.event has page coordinates. This prevents
+                    // an error when a mouse event conflicts with a zoom transition event.
+                    if (d3.event && typeof d3.event.pageX !== 'undefined') {
+                        tooltip.style("left", (d3.event.pageX + 10) + "px")
+                            .style("top", (d3.event.pageY - 28) + "px");
+                    }
                 })
                 .on("mouseout", function () {
                     tooltip.style("opacity", 0);
                 });
         }).catch(handleError(zoneGroup, "taxi_zones.json"));
+
+
+        // --- Search and Zoom Function ---
+        function searchAndZoom(inputId, features, idProperty, group, pathGenerator, svg, zoomBehavior) {
+            const searchId = document.getElementById(inputId).value.trim();
+            if (!searchId) return;
+
+            const foundFeature = features.find(f => String(f.properties[idProperty]) === searchId);
+
+            // Clear previous highlights
+            group.selectAll('path').classed('highlight', false);
+
+            if (foundFeature) {
+                const bounds = pathGenerator.bounds(foundFeature);
+                const dx = bounds[1][0] - bounds[0][0];
+                const dy = bounds[1][1] - bounds[0][1];
+                const x = (bounds[0][0] + bounds[1][0]) / 2;
+                const y = (bounds[0][1] + bounds[1][1]) / 2;
+                const scale = Math.max(1, Math.min(50, 0.9 / Math.max(dx / width, dy / height)));
+                const translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+                const transform = d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale);
+
+                svg.transition()
+                    .duration(750)
+                    .call(zoomBehavior.transform, transform);
+
+                // Highlight the found path
+                const selectedPath = group.selectAll('path').filter(d => String(d.properties[idProperty]) === searchId);
+                selectedPath.classed('highlight', true);
+
+                // Remove highlight after a delay
+                setTimeout(() => {
+                    selectedPath.classed('highlight', false);
+                }, 2500);
+
+
+            } else {
+                alert("ID not found.");
+            }
+        }
+
+        // --- Event Listeners for Search Buttons ---
+        d3.select("#tract-search-button").on("click", () => {
+            searchAndZoom('tract-search-input', tractFeatures, 'BoroCT2020', tractGroup, tractPath, tractSvg, tractZoom);
+        });
+
+        d3.select("#zone-search-button").on("click", () => {
+            searchAndZoom('zone-search-input', zoneFeatures, 'LocationID', zoneGroup, zonePath, zoneSvg, zoneZoom);
+        });
+
+        // --- Event Listeners for Zoom Buttons ---
+        const zoomFactor = 1.3; // How much to zoom in/out
+
+        d3.select("#tract-zoom-in").on("click", () => {
+            tractSvg.transition().duration(250).call(tractZoom.scaleBy, zoomFactor);
+        });
+        d3.select("#tract-zoom-out").on("click", () => {
+            tractSvg.transition().duration(250).call(tractZoom.scaleBy, 1 / zoomFactor);
+        });
+
+        d3.select("#zone-zoom-in").on("click", () => {
+            zoneSvg.transition().duration(250).call(zoneZoom.scaleBy, zoomFactor);
+        });
+        d3.select("#zone-zoom-out").on("click", () => {
+            zoneSvg.transition().duration(250).call(zoneZoom.scaleBy, 1 / zoomFactor);
+        });
+
 
         // Helper function for handling file loading errors
         function handleError(group, filename) {
